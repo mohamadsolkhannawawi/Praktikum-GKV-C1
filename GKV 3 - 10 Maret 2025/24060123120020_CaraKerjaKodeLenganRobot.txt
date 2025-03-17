@@ -1,0 +1,20 @@
+Nama : Mohamad Solkhan Nawawi
+NIM  : 24060123120020
+LAB  : GKV C1
+Tugas: Menjelaskan Cara kerja kode lengan robot
+
+Penjelasan cara kerja kode :
+1. Pertama kita gunakan header <GL/glut.h>, untuk fungsi OpenGL dan GLUT
+2. Kita membuat variable, shoulder dan elbow untuk menyimpan sudut rotasi
+3. Lalu pada prosedur init, kita mengaatur warna latar belakang menjadi hitam dan mode shading menjadi flat.
+4. Pada prosedur display, kita bersihkan layer sebelum menggambar ulang, lalu kita simpan keadaan matriks transformasi saat ini.
+5. Setelah baris glPushMatrix() pada display, selanjutnya kita mengatur posisi, rotasi dan ukuran setiap bagian lengan, yaitu lengan atas dan Bawah
+6. glutWireCube() digunakan untuk menggambar kubus wireframe sebagai lengan atas.
+7. glPopMatrix(), kita gunakan untuk mengembalikan matriks Utama, lalu kita gunakan glutSwapBuffers() untuk menggunakan double buffering agar tampilannya lebih halus.
+8. Prosedur reshape berisi kode yang berguna untuk mengatur viewport.
+9. Selain viewport, juga ada gluPerspective untuk mengatur perspektif dengan sudut yang diinginkan dan aspek rasio sesui ukuran jendela.
+10. Lalu prosedur keyboard, berisi casting untuk mengatur tombol keyboard mana yang harus ditekan untuk memberikan Gerakan aktif, seperti rotasi.
+11. Dalam fungsi main,  kita gunakan juga glutInitDisplayMode, kita setting agar double buffering dan mode warna RGB.
+12. Dengan glutdisplayFunc, digunakan untuk menggambar, lalu glutReshapeFunc untuk menangani apabila ada perubahan ukuran jendela.
+13. glutKeyboardFunc ini untuk menangani input yang nantinya digunakan untuk mengacu pada prosedur keyboard.
+14. glutMainLoop fungsi terakhir yang akan memulai loop Utama OpenGL, sehingga semua baris kode yang dipanggil akan ditampilkan.
