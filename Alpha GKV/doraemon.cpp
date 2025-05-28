@@ -6,36 +6,30 @@
 #include <stdio.h>
 #include <math.h>
 #include <GL/glut.h>
+#include <string>
 
-// Definisikan M_PI jika tidak tersedia
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
-// Posisi dan orientasi Doraemon
+
 static float posX = 0.0, posY = 0.0, posZ = 0.0;
 static float angleY = 0.0;
-static float tiltX = 0.0, tiltZ = 0.0;  // Kemiringan untuk condong saat bergerak
-// Target tilt values (what we're aiming for)
+static float tiltX = 0.0, tiltZ = 0.0;  
 static float targetTiltX = 0.0f, targetTiltZ = 0.0f;
-// Tilt increment speed (smaller = smoother but slower)
 static float tiltSpeed = 0.5f;
 
-// Rotasi baling-baling
 static float propellerRotation = 0.0;
 
-// Parameter kamera
-static float cameraDistance = 5.0;  // Jarak kamera dari Doraemon
-static float cameraHeight = 2.0;    // Ketinggian kamera relatif thd Doraemon
-static float freeCamX = 10.0, freeCamY = 8.0, freeCamZ = 10.0;  // Posisi kamera bebas
+static float cameraDistance = 5.0;  
+static float cameraHeight = 2.0;    
+static float freeCamX = 10.0, freeCamY = 8.0, freeCamZ = 10.0;  
 static int cameraMode = 1;  // 1 = third person, 0 = kamera bebas
 
-// Status tombol
 static bool keyStates[256];
 
-// Variabel untuk orientasi kamera
 static float camAngle = 0.0f;
-static float camLookX = 0.0f, camLookZ = -1.0f; // Vektor arah kamera
+static float camLookX = 0.0f, camLookZ = -1.0f; 
 
 float arenaSize = getArenaSize();
 
@@ -78,20 +72,68 @@ static void drawCylinder(float radius, float height, int slices) {
 }
 
 // Fungsi untuk menampilkan text di OpenGL
-void drawText(const char* text, float x, float y, float r, float g, float b) {
-    // Set warna teks
-    glColor3f(r, g, b);
-    glRasterPos2f(x, y);
-    
-    // Render teks karakter per karakter
+void drawText(const char* text, float x, float y,
+              float rText, float gText, float bText,         
+              float rBg, float gBg, float bBg, float aBg,   
+              void* font, float bgPaddingX, float bgPaddingY) {
+
+    float charHeight = 0.0f;
+    if (font == GLUT_BITMAP_HELVETICA_10) { charHeight = 10.0f; }
+    else if (font == GLUT_BITMAP_HELVETICA_12) { charHeight = 12.0f; }
+    else if (font == GLUT_BITMAP_HELVETICA_18) { charHeight = 18.0f; }
+    else if (font == GLUT_BITMAP_TIMES_ROMAN_10) { charHeight = 10.0f; }
+    else if (font == GLUT_BITMAP_TIMES_ROMAN_24) { charHeight = 24.0f; }
+    else if (font == GLUT_BITMAP_9_BY_15) { charHeight = 15.0f; }
+    else if (font == GLUT_BITMAP_8_BY_13) { charHeight = 13.0f; }
+    else { charHeight = 18.0f; } 
+
+    GLboolean lightingEnabled = glIsEnabled(GL_LIGHTING);
+    GLboolean textureEnabled = glIsEnabled(GL_TEXTURE_2D);
+    GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    GLboolean depthTestEnabled = glIsEnabled(GL_DEPTH_TEST);
+
+    if (lightingEnabled) glDisable(GL_LIGHTING);
+    if (textureEnabled) glDisable(GL_TEXTURE_2D);
+    if (depthTestEnabled) glDisable(GL_DEPTH_TEST);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
+
+    int totalTextWidth = 0;
     for (const char* c = text; *c; c++) {
-        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, *c);
+        totalTextWidth += glutBitmapWidth(font, *c);
     }
+
+    if (aBg > 0.0f && totalTextWidth > 0) { 
+        glColor4f(rBg, gBg, bBg, aBg); 
+        glBegin(GL_QUADS);
+            glVertex2f(x - bgPaddingX,               y - bgPaddingY);
+            glVertex2f(x + totalTextWidth + bgPaddingX, y - bgPaddingY);
+            glVertex2f(x + totalTextWidth + bgPaddingX, y + charHeight + bgPaddingY);
+            glVertex2f(x - bgPaddingX,               y + charHeight + bgPaddingY);
+        glEnd();
+    }
+
+    glColor3f(rText, gText, bText); 
+    
+    glRasterPos2f(x, y);
+    for (const char* c = text; *c; c++) {
+        glutBitmapCharacter(font, *c);
+    }
+
+    glRasterPos2f(x + 1, y); 
+    for (const char* c = text; *c; c++) {
+        glutBitmapCharacter(font, *c);
+    }
+
+    if (lightingEnabled) glEnable(GL_LIGHTING);
+    if (textureEnabled) glEnable(GL_TEXTURE_2D);
+    if (depthTestEnabled) glEnable(GL_DEPTH_TEST);
+    if (!blendEnabled) glDisable(GL_BLEND); 
 }
 
-// Function to smoothly adjust tilt angles
+// Fungsi untuk mengatur kemiringan terus menerus secara halus
 static void smoothTilt() {
-    // Gradually change tiltX towards targetTiltX
     if (tiltX < targetTiltX) {
         tiltX += tiltSpeed;
         if (tiltX > targetTiltX) tiltX = targetTiltX;
@@ -100,7 +142,6 @@ static void smoothTilt() {
         if (tiltX < targetTiltX) tiltX = targetTiltX;
     }
     
-    // Gradually change tiltZ towards targetTiltZ
     if (tiltZ < targetTiltZ) {
         tiltZ += tiltSpeed;
         if (tiltZ > targetTiltZ) tiltZ = targetTiltZ;
@@ -112,28 +153,36 @@ static void smoothTilt() {
 
 // Fungsi untuk menampilkan info kontrol
 void displayControlInfo() {
-    int yPos = 30; // Posisi Y awal (dari bawah)
-    int lineHeight = 20; // Tinggi setiap baris
-    
-    // Informasi kontrol utama
-    drawText("0: Mode kamera bebas", 10, yPos, 1.0f, 1.0f, 1.0f);
-    yPos += lineHeight;
-    drawText("1: Mode third person", 10, yPos, 1.0f, 1.0f, 1.0f);
-    yPos += lineHeight;
-    
-    if (cameraMode == 0) {
-        // Info kontrol untuk mode kamera bebas
-        drawText("--- Mode Free Camera ---", 800/2 - 100, 600 - 50, 1.0f, 1.0f, 0.0f);
-        drawText("Tombol panah: Gerak kamera secara horizontal", 800/2 - 150, 600 - 70, 1.0f, 1.0f, 0.0f);
-        drawText("W/S: Gerak kamera secara vertikal", 800/2 - 150, 600 - 90, 1.0f, 1.0f, 0.0f);
-        drawText("A/D: Rotasi kamera", 800/2 - 150, 600 - 110, 1.0f, 1.0f, 0.0f);
-    } else {
-        // Info kontrol untuk mode third person
-        drawText("--- Mode Third Person ---", 800/2 - 100, 600 - 50, 1.0f, 1.0f, 0.0f);
-        drawText("W/S: Gerak Doraemon maju/mundur", 800/2 - 150, 600 - 70, 1.0f, 1.0f, 0.0f);
-        drawText("A/D: Putar Doraemon kiri/kanan", 800/2 - 150, 600 - 90, 1.0f, 1.0f, 0.0f);
-        drawText("Q/E: Terbang naik/turun", 800/2 - 150, 600 - 110, 1.0f, 1.0f, 0.0f);
+    void* font = GLUT_BITMAP_HELVETICA_18; 
+    float bgPaddingX = 4.0f; 
+    float bgPaddingY = 3.0f; 
+
+    float rText = 0.0f, gText = 0.0f, bText = 0.0f; 
+    float rBg = 1.0f, gBg = 1.0f, bBg = 1.0f, aBg = 0.85f; 
+
+    string panduanStr; 
+
+    panduanStr += "0: Mode Kamera Bebas || 1: Mode Third Person";
+
+    if (cameraMode == 0) { 
+        panduanStr += " || Panah: Gerak Horizontal || W/S: Gerak Vertikal || A/D: Rotasi Kamera";
+    } else { 
+        panduanStr += " || W/S: Maju/Mundur || A/D: Putar Kiri/Kanan || Q/E: Terbang Naik/Turun";
     }
+
+    int totalWidth = 0;
+    for (size_t i = 0; i < panduanStr.length(); ++i) { 
+        totalWidth += glutBitmapWidth(font, panduanStr[i]);
+    }
+
+    float screenWidth = glutGet(GLUT_WINDOW_WIDTH);
+    float xPos = (screenWidth - totalWidth) / 2.0f; 
+    float yPos = 30; 
+
+    drawText(panduanStr.c_str(), xPos, yPos,
+             rText, gText, bText,
+             rBg, gBg, bBg, aBg,
+             font, bgPaddingX, bgPaddingY);
 }
 
 // Fungsi untuk orientasi kamera
@@ -173,10 +222,13 @@ void specialKeyPressed(int key, int x, int y) {
 
 // Fungsi untuk menggambar baling-baling bambu
 static void drawPropeller() {
+    GLboolean lighting_on;
+    glGetBooleanv(GL_LIGHTING, &lighting_on);
+
     glPushMatrix();
     
     // Batang baling-baling (vertikal)
-    glColor3f(0.5f, 0.35f, 0.05f);  // Warna coklat
+    if (lighting_on) glColor3f(0.5f, 0.35f, 0.05f);  // Warna coklat
     glPushMatrix();
     drawCylinder(0.025f, 0.25f, 20);
     glPopMatrix();
@@ -185,19 +237,19 @@ static void drawPropeller() {
     glTranslatef(0.0f, 0.3f, 0.0f);
     glRotatef(propellerRotation, 0.0f, 1.0f, 0.0f);
     
-    glColor3f(0.5f, 0.38f, 0.05f);  // Warna coklat
+    if (lighting_on) glColor3f(0.5f, 0.38f, 0.05f);  // Warna coklat
     
     // 4 bilah baling-baling
     for (int i = 0; i < 6; i++) {
         glPushMatrix();
         
-        glTranslatef(0.0f, -0.04f, 0.0f);             // Posisikan sedikit ke bawah
-        glRotatef(90.0f * i, 0.0f, 1.0f, 0.0f);       // Rotasi tiap bilah 90 derajat
+        glTranslatef(0.0f, -0.04f, 0.0f);           
+        glRotatef(90.0f * i, 0.0f, 1.0f, 0.0f);      
         
         glPushMatrix();
-        glTranslatef(0.2f, 0.0f, 0.0f);               // Geser ke ujung bilah
-        glScalef(0.25f, 0.045f, 0.1f);                // Panjang, ketebalan, lebar bilah
-        glutSolidCube(1.0f);                          // Gambar kubus (akan diskalakan jadi balok)
+        glTranslatef(0.2f, 0.0f, 0.0f);             
+        glScalef(0.25f, 0.045f, 0.1f);               
+        glutSolidCube(1.0f);                          
         glPopMatrix();
 
         glPopMatrix();
@@ -208,12 +260,14 @@ static void drawPropeller() {
 
 // Fungsi untuk menggambar kepala Doraemon
 static void drawHead() {
+    GLboolean lighting_on;
+    glGetBooleanv(GL_LIGHTING, &lighting_on);
     // Kepala (bulat) - biru
-    glColor3f(0.0f, 0.6f, 1.0f);
+    if (lighting_on) glColor3f(0.0f, 0.6f, 1.0f);
     glutSolidSphere(0.5f, 30, 30);
     
     // Muka (putih)
-    glColor3f(1.0f, 1.0f, 1.0f);
+    if (lighting_on) glColor3f(1.0f, 1.0f, 1.0f);
     glPushMatrix();
     glTranslatef(0.0f, 0.0f, 0.25f);
     glScalef(0.8f, 0.8f, 0.5f);
@@ -221,44 +275,42 @@ static void drawHead() {
     glPopMatrix();
     
     // Mata kiri
-    glColor3f(1.0f, 1.0f, 1.0f);
+    if (lighting_on) glColor3f(1.0f, 1.0f, 1.0f);
     glPushMatrix();
     glTranslatef(-0.15f, 0.2f, 0.425f);
     glutSolidSphere(0.1f, 20, 20);
     
     // Pupil kiri
-    glColor3f(0.0f, 0.0f, 0.0f);
+    if (lighting_on) glColor3f(0.0f, 0.0f, 0.0f);
     glTranslatef(0.0f, 0.0f, 0.07f);
     glutSolidSphere(0.04f, 10, 10);
     glPopMatrix();
     
     // Mata kanan
-    glColor3f(1.0f, 1.0f, 1.0f);
+    if (lighting_on) glColor3f(1.0f, 1.0f, 1.0f);
     glPushMatrix();
     glTranslatef(0.15f, 0.2f, 0.425f);
     glutSolidSphere(0.1f, 20, 20);
     
     // Pupil kanan
-    glColor3f(0.0f, 0.0f, 0.0f);
+    if (lighting_on) glColor3f(0.0f, 0.0f, 0.0f);
     glTranslatef(0.0f, 0.0f, 0.07f);
     glutSolidSphere(0.04f, 10, 10);
     glPopMatrix();
     
     // Hidung (merah)
-    glColor3f(1.0f, 0.0f, 0.0f);
+    if (lighting_on) glColor3f(1.0f, 0.0f, 0.0f);
     glPushMatrix();
     glTranslatef(0.0f, 0.05f, 0.5f);
     glutSolidSphere(0.08f, 20, 20);
     glPopMatrix();
     
     // Mulut
-    glColor3f(1.0f, 0.0f, 0.0f); // Warna merah
+    if (lighting_on) glColor3f(1.0f, 0.0f, 0.0f); // Warna merah
     glPushMatrix();
     glTranslatef(0.0f, -0.1f, 0.5f); // Posisi mulut
     glRotatef(270.0f, 0.0f, 0.0f, 1.0f); // Rotasi agar menghadap ke depan
     glScalef(0.15f, 0.1f, 0.1f); // Skala untuk ukuran mulut
-
-    // Membuat setengah tabung (setengah lingkaran)
     GLUquadricObj *mulut = gluNewQuadric();
     gluQuadricDrawStyle(mulut, GLU_FILL);
     gluPartialDisk(mulut, 0.0f, 1.0f, 20, 1, 0, 180); // Membuat setengah lingkaran
@@ -266,31 +318,21 @@ static void drawHead() {
     glPopMatrix();
     
     // Kumis
-    glColor3f(0.0f, 0.0f, 0.0f);
+    if (lighting_on) glColor3f(0.0f, 0.0f, 0.0f);
     glLineWidth(2.0f);
     
     // Kumis kiri
     glBegin(GL_LINES);
-    glVertex3f(-0.2f, -0.05f, 0.5f);
-    glVertex3f(-0.4f, 0.0f, 0.4f);
-    
-    glVertex3f(-0.2f, -0.1f, 0.5f);
-    glVertex3f(-0.4f, -0.1f, 0.4f);
-    
-    glVertex3f(-0.2f, -0.15f, 0.5f);
-    glVertex3f(-0.4f, -0.2f, 0.4f);
+    glVertex3f(-0.2f, -0.05f, 0.5f); glVertex3f(-0.4f, 0.0f, 0.4f);
+    glVertex3f(-0.2f, -0.1f, 0.5f); glVertex3f(-0.4f, -0.1f, 0.4f);
+    glVertex3f(-0.2f, -0.15f, 0.5f); glVertex3f(-0.4f, -0.2f, 0.4f);
     glEnd();
     
     // Kumis kanan
     glBegin(GL_LINES);
-    glVertex3f(0.2f, -0.05f, 0.5f);
-    glVertex3f(0.4f, 0.0f, 0.4f);
-    
-    glVertex3f(0.2f, -0.1f, 0.5f);
-    glVertex3f(0.4f, -0.1f, 0.4f);
-    
-    glVertex3f(0.2f, -0.15f, 0.5f);
-    glVertex3f(0.4f, -0.2f, 0.4f);
+    glVertex3f(0.2f, -0.05f, 0.5f); glVertex3f(0.4f, 0.0f, 0.4f);
+    glVertex3f(0.2f, -0.1f, 0.5f); glVertex3f(0.4f, -0.1f, 0.4f);
+    glVertex3f(0.2f, -0.15f, 0.5f); glVertex3f(0.4f, -0.2f, 0.4f);
     glEnd();
     
     glLineWidth(1.0f);
@@ -298,8 +340,11 @@ static void drawHead() {
 
 // Fungsi untuk menggambar badan Doraemon
 static void drawBody() {
+    GLboolean lighting_on;
+    glGetBooleanv(GL_LIGHTING, &lighting_on); 
+
     // Badan (biru)
-    glColor3f(0.0f, 0.6f, 1.0f);
+    if (lighting_on) glColor3f(0.0f, 0.6f, 1.0f);
     glPushMatrix();
     glTranslatef(0.0f, -0.7f, 0.0f);
     glScalef(0.8f, 1.0f, 0.6f);
@@ -307,7 +352,7 @@ static void drawBody() {
     glPopMatrix();
     
     // Perut (putih)
-    glColor3f(1.0f, 1.0f, 1.0f);
+    if (lighting_on) glColor3f(1.0f, 1.0f, 1.0f);
     glPushMatrix();
     glTranslatef(0.0f, -0.75f, 0.245f);
     glScalef(0.8f, 0.8f, 0.3f);
@@ -315,7 +360,7 @@ static void drawBody() {
     glPopMatrix();
     
     // Kalung (merah)
-    glColor3f(1.0f, 0.0f, 0.0f);
+    if (lighting_on) glColor3f(1.0f, 0.0f, 0.0f);
     glPushMatrix();
     glTranslatef(0.0f, -0.4f, 0.0f);
     glRotatef(90.0f, 1.0f, 0.0f, 0.0f);
@@ -323,7 +368,7 @@ static void drawBody() {
     glPopMatrix();
     
     // Lonceng (kuning)
-    glColor3f(1.0f, 1.0f, 0.0f);
+    if (lighting_on) glColor3f(1.0f, 1.0f, 0.0f);
     glPushMatrix();
     glTranslatef(0.0f, -0.45f, 0.35f);
     glutSolidSphere(0.07f, 20, 20);
@@ -332,8 +377,11 @@ static void drawBody() {
 
 // Fungsi untuk menggambar tangan Doraemon
 static void drawArms() {
+    GLboolean lighting_on;
+    glGetBooleanv(GL_LIGHTING, &lighting_on); 
+
     // Tangan kiri (biru)
-    glColor3f(0.0f, 0.6f, 1.0f);
+    if (lighting_on) glColor3f(0.0f, 0.6f, 1.0f);
     glPushMatrix();
     glTranslatef(-0.4f, -0.6f, 0.0f);
     glScalef(0.25f, 0.4f, 0.2f);
@@ -341,6 +389,7 @@ static void drawArms() {
     glPopMatrix();
     
     // Tangan kanan (biru)
+    if (lighting_on) glColor3f(0.0f, 0.6f, 1.0f); 
     glPushMatrix();
     glTranslatef(0.4f, -0.6f, 0.0f);
     glScalef(0.25f, 0.4f, 0.2f);
@@ -348,13 +397,14 @@ static void drawArms() {
     glPopMatrix();
     
     // Sarung tangan kiri (putih)
-    glColor3f(1.0f, 1.0f, 1.0f);
+    if (lighting_on) glColor3f(1.0f, 1.0f, 1.0f);
     glPushMatrix();
     glTranslatef(-0.4f, -0.85f, 0.0f);
     glutSolidSphere(0.1f, 20, 20);
     glPopMatrix();
     
     // Sarung tangan kanan (putih)
+    if (lighting_on) glColor3f(1.0f, 1.0f, 1.0f); 
     glPushMatrix();
     glTranslatef(0.4f, -0.85f, 0.0f);
     glutSolidSphere(0.1f, 20, 20);
@@ -363,8 +413,11 @@ static void drawArms() {
 
 // Fungsi untuk menggambar kaki Doraemon
 static void drawLegs() {
+    GLboolean lighting_on;
+    glGetBooleanv(GL_LIGHTING, &lighting_on); 
+
     // Kaki kiri (biru)
-    glColor3f(0.0f, 0.6f, 1.0f);
+    if (lighting_on) glColor3f(0.0f, 0.6f, 1.0f);
     glPushMatrix();
     glTranslatef(-0.2f, -1.2f, 0.0f);
     glScalef(0.3f, 0.5f, 0.2f);
@@ -372,6 +425,7 @@ static void drawLegs() {
     glPopMatrix();
     
     // Kaki kanan (biru)
+    if (lighting_on) glColor3f(0.0f, 0.6f, 1.0f); // Tambahkan glColor di sini juga
     glPushMatrix();
     glTranslatef(0.2f, -1.2f, 0.0f);
     glScalef(0.3f, 0.5f, 0.2f);
@@ -379,7 +433,7 @@ static void drawLegs() {
     glPopMatrix();
     
     // Sepatu kiri (putih)
-    glColor3f(1.0f, 1.0f, 1.0f);
+    if (lighting_on) glColor3f(1.0f, 1.0f, 1.0f);
     glPushMatrix();
     glTranslatef(-0.2f, -1.4f, 0.025f);
     glScalef(0.2f, 0.1f, 0.2f);
@@ -387,6 +441,7 @@ static void drawLegs() {
     glPopMatrix();
     
     // Sepatu kanan (putih)
+    if (lighting_on) glColor3f(1.0f, 1.0f, 1.0f); 
     glPushMatrix();
     glTranslatef(0.2f, -1.4f, 0.025f);
     glScalef(0.2f, 0.1f, 0.2f);
@@ -451,16 +506,14 @@ void drawGround() {
 // Fungsi untuk memproses tombol yang ditekan
 static void processKeys() {
     float speed = 0.3f;
-    float maxTilt = 15.0f; // Kemiringan maksimum dalam derajat
-    float camSpeed = 0.25f; // Kecepatan gerakan kamera bebas
-    float collisionRadius = 0.5f; // Approximate radius of Doraemon
+    float maxTilt = 15.0f; 
+    float camSpeed = 0.25f;
+    float collisionRadius = 0.5f; 
     
-    // Set target tilt to return to neutral when no keys are pressed
     targetTiltX = 0.0f;
     targetTiltZ = 0.0f;
     
     if (cameraMode == 0) {
-        // Free camera controls - unchanged
         if (keyStates['w'] || keyStates['W']) {
             freeCamY += camSpeed;
         }
@@ -471,14 +524,13 @@ static void processKeys() {
             }
         }
         
-        // A/D for camera rotation
         if (keyStates['a'] || keyStates['A']) {
-            camAngle -= 0.05f;
+            camAngle -= 0.15f;
             orientCamera(camAngle);
         }
         
         if (keyStates['d'] || keyStates['D']) {
-            camAngle += 0.05f;
+            camAngle += 0.15f;
             orientCamera(camAngle);
         }
     } else {
@@ -487,65 +539,51 @@ static void processKeys() {
         float newZ = posZ;
         bool moved = false;
         
-        // Doraemon controls
         if (keyStates['w'] || keyStates['W']) {
-            // Calculate movement
             newX = posX + speed * sin(angleY * M_PI / 180.0);
             newZ = posZ + speed * cos(angleY * M_PI / 180.0);
             moved = true;
-            targetTiltZ = maxTilt; // Set target tilt forward
+            targetTiltZ = maxTilt; 
         }
         
         if (keyStates['s'] || keyStates['S']) {
-            // Calculate movement
             newX = posX - speed * sin(angleY * M_PI / 180.0);
             newZ = posZ - speed * cos(angleY * M_PI / 180.0);
             moved = true;
-            targetTiltZ = -maxTilt; // Set target tilt backward
+            targetTiltZ = -maxTilt;
         }
         
         if (keyStates['a'] || keyStates['A']) {
-            // Rotate left
-            angleY += 1.0f;
-            targetTiltX = -maxTilt; // Set target tilt left
+            angleY += 3.0f;
+            targetTiltX = -maxTilt; 
         }
         
         if (keyStates['d'] || keyStates['D']) {
-            // Rotate right
-            angleY -= 1.0;
-            targetTiltX = maxTilt; // Set target tilt right
+            angleY -= 3.0;
+            targetTiltX = maxTilt; 
         }
         
         if (keyStates['q'] || keyStates['Q']) {
-            // Move up
             newY = posY + speed;
             moved = true;
         }
         
         if (keyStates['e'] || keyStates['E']) {
-            // Move down
             newY = posY - speed;
             moved = true;
         }
         
-        // Handle movement and collision
         if (moved) {
-            // Try X and Z movement (horizontal) separately from Y (vertical)
-            
-            // First try horizontal movement (X and Z)
             float responseX = 0.0f;
             float responseY = 0.0f;
             float responseZ = 0.0f;
             
-            // Check horizontal movement only (no Y change)
             bool horizontalCollision = checkCollision(newX, posY, newZ, collisionRadius, 
                                                    &responseX, &responseY, &responseZ);
             
-            // Apply horizontal movement
             posX = newX + responseX;
             posZ = newZ + responseZ;
             
-            // Now apply vertical movement
             responseX = 0.0f;
             responseY = 0.0f;
             responseZ = 0.0f;
@@ -553,10 +591,8 @@ static void processKeys() {
             bool verticalCollision = checkCollision(posX, newY, posZ, collisionRadius,
                                                  &responseX, &responseY, &responseZ);
             
-            // Apply vertical response
             posY = newY + responseY;
             
-            // Final check to ensure we're at the right height
             responseX = 0.0f;
             responseY = 0.0f;
             responseZ = 0.0f;
@@ -564,15 +600,12 @@ static void processKeys() {
             checkCollision(posX, posY, posZ, collisionRadius,
                           &responseX, &responseY, &responseZ);
             
-            // Apply any additional adjustment (mainly for Y positioning)
             posX += responseX;
             posY += responseY;
             posZ += responseZ;
         }
         
-        // Add respawn functionality
         if (keyStates['r'] || keyStates['R']) {
-            // Respawn Doraemon at initial position
             posX = 10.0f;
             posY = 10.0f;
             posZ = 0.0f;
@@ -581,51 +614,44 @@ static void processKeys() {
     }
 }
 
-// Function to update Doraemon (called from idle)
+// Fungsi untuk memperbarui posisi dan orientasi Doraemon
 void updateDoraemon() {
-    // Rotasi baling-baling
     propellerRotation += 10.0f;
     if (propellerRotation > 360.0f) {
         propellerRotation -= 360.0f;
     }
     
-    // Process keyboard input
     processKeys();
     
-    // Apply smooth tilting
     smoothTilt();
 }
 
-// Function to set key state
+// Fungsi untuk mengatur keadaan tombol keyboard
 void setKeyState(unsigned char key, bool state) {
     keyStates[key] = state;
 }
 
-// Function to set camera mode
+// Fungsi untuk mengatur mode kamera
 void setCameraMode(int mode) {
     cameraMode = mode;
 }
 
-// Function to get camera mode
+// Fungsi untuk mendapatkan mode kamera
 int getCameraMode() {
     return cameraMode;
 }
 
 // Fungsi untuk memeriksa tabrakan kamera dengan objek di arena
 bool checkCameraCollision(float cameraX, float cameraY, float cameraZ, float* responseX, float* responseY, float* responseZ) {
-    // Radius kamera sekitar Doraemon (untuk menghindari menembus objek)
     float cameraRadius = 1.0f;
     
-    // Pemeriksaan tabrakan dengan arena
     bool collision = false;
     *responseX = 0.0f;
     *responseY = 0.0f;
     *responseZ = 0.0f;
 
-    // Periksa tabrakan dengan tembok arena
     float boundarySize = arenaSize / 2;
     
-    // Jika kamera lebih dekat dengan dinding, kita dorong kamera ke luar
     if (cameraX + cameraRadius > boundarySize) {
         *responseX = (boundarySize - (cameraX + cameraRadius));
         collision = true;
@@ -646,14 +672,13 @@ bool checkCameraCollision(float cameraX, float cameraY, float cameraZ, float* re
     return collision;
 }
 
-// Getter functions for camera
+// Fungsi untuk mendapatkan posisi kamera X 
 float getCameraX() {
     if (cameraMode == 1) {
         float responseX = 0.0f, responseY = 0.0f, responseZ = 0.0f;
         float cameraX = posX - cameraDistance * sin(angleY * M_PI / 180.0);
-        // Periksa tabrakan kamera dengan objek dan atur posisi jika diperlukan
         if (checkCameraCollision(cameraX, posY, posZ, &responseX, &responseY, &responseZ)) {
-            cameraX += responseX;  // Sesuaikan posisi kamera
+            cameraX += responseX;  
         }
         return cameraX;
     } else {
@@ -661,6 +686,7 @@ float getCameraX() {
     }
 }
 
+// Fungsi untuk mendapatkan posisi kamera Y
 float getCameraY() {
     if (cameraMode == 1) {
         return posY + cameraHeight;
@@ -669,14 +695,14 @@ float getCameraY() {
     }
 }
 
+// Fungsi untuk mendapatkan posisi kamera Z
 float getCameraZ() {
     if (cameraMode == 1) {
         float responseX = 0.0f, responseY = 0.0f, responseZ = 0.0f;
         float cameraZ = posZ - cameraDistance * cos(angleY * M_PI / 180.0);
         
-        // Periksa tabrakan kamera dengan objek dan atur posisi jika diperlukan
         if (checkCameraCollision(posX, posY, cameraZ, &responseX, &responseY, &responseZ)) {
-            cameraZ += responseZ;  // Sesuaikan posisi kamera
+            cameraZ += responseZ; 
         }
         return cameraZ;
     } else {
@@ -684,6 +710,7 @@ float getCameraZ() {
     }
 }
 
+// Fungsi untuk mendapatkan orientasi kamera X
 float getLookX() {
     if (cameraMode == 1) {
         return posX;
@@ -692,6 +719,7 @@ float getLookX() {
     }
 }
 
+// Fungsi untuk mendapatkan orientasi kamera Y
 float getLookY() {
     if (cameraMode == 1) {
         return posY;
@@ -700,6 +728,7 @@ float getLookY() {
     }
 }
 
+// Fungsi untuk mendapatkan orientasi kamera Z
 float getLookZ() {
     if (cameraMode == 1) {
         return posZ;
@@ -708,14 +737,12 @@ float getLookZ() {
     }
 }
 
-// Function to initialize Doraemon
+// Fungsi untuk menginisialisasi Doraemon
 void initDoraemon() {
-    // Initialize key states
     for (int i = 0; i < 256; i++) {
         keyStates[i] = false;
     }
     
-    // Initialize position, orientation, etc.
     posX = 10.0;
     posY = 10.0;
     posZ = 0.0;
@@ -726,22 +753,29 @@ void initDoraemon() {
     targetTiltZ = 0.0;
     propellerRotation = 0.0;
     
-    // Initialize camera
     camAngle = 0.0f;
     camLookX = 0.0f;
     camLookZ = -1.0f;
     orientCamera(camAngle);
 }
 
-// Position getters for Doraemon
+// Fungsi resetDoraemonState 
+void resetDoraemonState() {
+    initDoraemon(); 
+    printf("Doraemon state reset.\n");
+}
+
+// Fungsi untuk mendapatkan posisi Doraemon X
 float getDoraemonX() {
     return posX;
 }
 
+// Fungsi untuk mendapatkan posisi Doraemon Y
 float getDoraemonY() {
     return posY;
 }
 
+// Fungsi untuk mendapatkan posisi Doraemon Z
 float getDoraemonZ() {
     return posZ;
 }

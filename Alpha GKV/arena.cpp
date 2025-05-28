@@ -6,12 +6,16 @@
 #include <math.h>
 #include <stdio.h>
 #include <GL/glut.h>
+extern GLuint texture_tembok_pembatas;
+extern GLuint texture_jalan_paving;
+extern GLuint texture_gedung_q1;
+extern GLuint texture_gedung_q2;
+extern GLuint texture_gedung_q3;
+extern GLuint texture_gedung_q4;
 
-// Arena properties
 static float arenaSize = 50.0f;
 static float wallHeight = 100.0f;
 
-// Camera properties
 static float posX = 0.0f;
 static float posY = 2.0f;
 static float posZ = 15.0f;
@@ -21,16 +25,14 @@ static float lookZ = 0.0f;
 static float angleX = 0.0f;
 static float angleY = 0.0f;
 
-// Buildings collection
-static std::vector<Building> buildings;
+static vector<Building> buildings;
 
-// Warna-warna untuk gedung
 static Color colors[] = {
-    {0.8f, 0.8f, 0.8f}, // Abu-abu muda
-    {0.7f, 0.7f, 0.8f}, // Abu-abu kebiruan
-    {0.6f, 0.6f, 0.7f}, // Abu-abu tua
-    {0.8f, 0.8f, 0.7f}, // Cream
-    {0.7f, 0.8f, 0.7f}  // Abu-abu kehijauan
+    {0.8f, 0.8f, 0.8f}, 
+    {0.7f, 0.7f, 0.8f}, 
+    {0.6f, 0.6f, 0.7f}, 
+    {0.8f, 0.8f, 0.7f}, 
+    {0.7f, 0.8f, 0.7f}  
 };
 
 // Fungsi untuk menambahkan gedung ke vektor
@@ -40,139 +42,186 @@ static void addBuilding(float x, float z, float width, float depth, float height
 }
 
 // Fungsi untuk membuat gedung
-static void drawBuilding(float x, float z, float width, float depth, float height, Color color) {
+static void drawBuilding(float x, float z, float width, float depth, float height, Color color, float alpha, GLuint textureId) {
     glPushMatrix();
-    glTranslatef(x, height/2, z);
-    glColor3f(color.r, color.g, color.b);
+    glTranslatef(x, height / 2.0f, z); 
     
+    bool useTexture = (textureId != 0); 
+
+    if (useTexture) {
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, textureId);
+        glColor4f(1.0f, 1.0f, 1.0f, alpha);
+    } else {
+        glColor4f(color.r, color.g, color.b, alpha);
+    }
+    
+    if (alpha < 1.0f) {
+        glDepthMask(GL_FALSE); 
+    }
+
     // Gedung utama
     glPushMatrix();
     glScalef(width, height, depth);
-    glutSolidCube(1.0);
+    glutSolidCube(1.0); 
     glPopMatrix();
     
-    // Garis-garis untuk jendela
-    glColor3f(0.1f, 0.1f, 0.2f);
-    float windowSize = 0.5f;
-    float spacing = 0.6f;
+    if (useTexture) {
+        glDisable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0); 
+    }
+
+    if (useTexture) glDisable(GL_TEXTURE_2D); 
     
-    // Jendela depan
-    for (float wx = -width/2 + spacing; wx < width/2; wx += spacing) {
-        for (float wy = -height/2 + spacing; wy < height/2; wy += spacing) {
-            glPushMatrix();
-            glTranslatef(wx, wy, depth/2 + 0.01f);
-            glScalef(windowSize, windowSize, 0.01f);
-            glutSolidCube(1.0);
-            glPopMatrix();
-        }
+    if (alpha < 1.0f) { 
+      glColor4f(0.1f, 0.1f, 0.2f, alpha); 
+    } else {
+      glColor4f(0.1f, 0.1f, 0.2f, 1.0f); 
     }
     
-    // Jendela belakang
-    for (float wx = -width/2 + spacing; wx < width/2; wx += spacing) {
-        for (float wy = -height/2 + spacing; wy < height/2; wy += spacing) {
-            glPushMatrix();
-            glTranslatef(wx, wy, -depth/2 - 0.01f);
-            glScalef(windowSize, windowSize, 0.01f);
-            glutSolidCube(1.0);
-            glPopMatrix();
-        }
-    }
-    
-    // Jendela samping kiri
-    for (float wz = -depth/2 + spacing; wz < depth/2; wz += spacing) {
-        for (float wy = -height/2 + spacing; wy < height/2; wy += spacing) {
-            glPushMatrix();
-            glTranslatef(-width/2 - 0.01f, wy, wz);
-            glScalef(0.01f, windowSize, windowSize);
-            glutSolidCube(1.0);
-            glPopMatrix();
-        }
-    }
-    
-    // Jendela samping kanan
-    for (float wz = -depth/2 + spacing; wz < depth/2; wz += spacing) {
-        for (float wy = -height/2 + spacing; wy < height/2; wy += spacing) {
-            glPushMatrix();
-            glTranslatef(width/2 + 0.01f, wy, wz);
-            glScalef(0.01f, windowSize, windowSize);
-            glutSolidCube(1.0);
-            glPopMatrix();
-        }
+    if (alpha < 1.0f) {
+        glDepthMask(GL_TRUE); 
     }
     
     glPopMatrix();
 }
 
+// FUNGSI BARU: Untuk mengecek apakah kamera di dalam gedung
+static bool isCameraInsideThisBuilding(const Building& building, float camX, float camY, float camZ) {
+    float buildingMinX = building.x - building.width / 2.0f;
+    float buildingMaxX = building.x + building.width / 2.0f;
+    float buildingMinY = 0.0f; // Asumsi gedung mulai dari Y=0
+    float buildingMaxY = building.height;
+    float buildingMinZ = building.z - building.depth / 2.0f;
+    float buildingMaxZ = building.z + building.depth / 2.0f;
+
+    if (camX >= buildingMinX && camX <= buildingMaxX &&
+        camY >= buildingMinY && camY <= buildingMaxY && 
+        camZ >= buildingMinZ && camZ <= buildingMaxZ) {
+        return true;
+    }
+    return false;
+}
+
 // Fungsi untuk menggambar tembok arena
 static void drawWalls() {
-    float boundarySize = arenaSize / 2;
-    float wallThickness = 1.0f;
-    
-    glColor3f(0.5f, 0.5f, 0.5f); // Warna tembok
-    
-    // Tembok selatan
+    float boundarySize = arenaSize / 2.0f;
+    float wallThickness = 1.0f; 
+
+    if (texture_tembok_pembatas == 0) { 
+        glColor3f(0.5f, 0.5f, 0.5f); 
+    } else {
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, texture_tembok_pembatas); 
+        glColor3f(1.0f, 1.0f, 1.0f); 
+    }
+
+    float texRepeatX_longWall = (arenaSize + wallThickness * 2.0f) / 5.0f; 
+    float texRepeatX_shortWall = arenaSize / 5.0f; 
+    float texRepeatY_wall = wallHeight / 5.0f;   
+
+    glNormal3f(0.0f, 0.0f, 0.0f); 
+
+    // Tembok Selatan (Bagian Dalam - Menghadap -Z)
     glPushMatrix();
-    glTranslatef(0.0f, wallHeight/2, boundarySize + wallThickness/2);
-    glScalef(arenaSize + wallThickness*2, wallHeight, wallThickness);
-    glutSolidCube(1.0);
+    glTranslatef(0.0f, 0.0f, boundarySize); 
+    glBegin(GL_QUADS);
+        glNormal3f(0.0f, 0.0f, -1.0f); // Normal menghadap ke dalam arena (-Z)
+        glTexCoord2f(0.0f, 0.0f); glVertex3f(-boundarySize - wallThickness, 0.0f, 0.0f);
+        glTexCoord2f(texRepeatX_longWall, 0.0f); glVertex3f(boundarySize + wallThickness, 0.0f, 0.0f);
+        glTexCoord2f(texRepeatX_longWall, texRepeatY_wall); glVertex3f(boundarySize + wallThickness, wallHeight, 0.0f);
+        glTexCoord2f(0.0f, texRepeatY_wall); glVertex3f(-boundarySize - wallThickness, wallHeight, 0.0f);
+    glEnd();
+    glPopMatrix();
+
+    // Tembok Utara (Bagian Dalam - Menghadap +Z)
+    glPushMatrix();
+    glTranslatef(0.0f, 0.0f, -boundarySize); 
+    glBegin(GL_QUADS);
+        glNormal3f(0.0f, 0.0f, 1.0f); 
+        glTexCoord2f(0.0f, 0.0f); glVertex3f(boundarySize + wallThickness, 0.0f, 0.0f);
+        glTexCoord2f(texRepeatX_longWall, 0.0f); glVertex3f(-boundarySize - wallThickness, 0.0f, 0.0f);
+        glTexCoord2f(texRepeatX_longWall, texRepeatY_wall); glVertex3f(-boundarySize - wallThickness, wallHeight, 0.0f);
+        glTexCoord2f(0.0f, texRepeatY_wall); glVertex3f(boundarySize + wallThickness, wallHeight, 0.0f);
+    glEnd();
+    glPopMatrix();
+
+    // Tembok Timur (Bagian Dalam - Menghadap -X)
+    glPushMatrix();
+    glTranslatef(boundarySize, 0.0f, 0.0f); 
+    glBegin(GL_QUADS);
+        glNormal3f(-1.0f, 0.0f, 0.0f); 
+        glTexCoord2f(0.0f, 0.0f); glVertex3f(0.0f, 0.0f, boundarySize + wallThickness);
+        glTexCoord2f(texRepeatX_shortWall, 0.0f); glVertex3f(0.0f, 0.0f, -boundarySize - wallThickness);
+        glTexCoord2f(texRepeatX_shortWall, texRepeatY_wall); glVertex3f(0.0f, wallHeight, -boundarySize - wallThickness);
+        glTexCoord2f(0.0f, texRepeatY_wall); glVertex3f(0.0f, wallHeight, boundarySize + wallThickness);
+    glEnd();
     glPopMatrix();
     
-    // Tembok utara
+    // Tembok Barat (Bagian Dalam - Menghadap +X)
     glPushMatrix();
-    glTranslatef(0.0f, wallHeight/2, -boundarySize - wallThickness/2);
-    glScalef(arenaSize + wallThickness*2, wallHeight, wallThickness);
-    glutSolidCube(1.0);
+    glTranslatef(-boundarySize, 0.0f, 0.0f); 
+    glBegin(GL_QUADS);
+        glNormal3f(1.0f, 0.0f, 0.0f); 
+        glTexCoord2f(0.0f, 0.0f); glVertex3f(0.0f, 0.0f, -boundarySize - wallThickness);
+        glTexCoord2f(texRepeatX_shortWall, 0.0f); glVertex3f(0.0f, 0.0f, boundarySize + wallThickness);
+        glTexCoord2f(texRepeatX_shortWall, texRepeatY_wall); glVertex3f(0.0f, wallHeight, boundarySize + wallThickness);
+        glTexCoord2f(0.0f, texRepeatY_wall); glVertex3f(0.0f, wallHeight, -boundarySize - wallThickness);
+    glEnd();
     glPopMatrix();
-    
-    // Tembok timur
-    glPushMatrix();
-    glTranslatef(boundarySize + wallThickness/2, wallHeight/2, 0.0f);
-    glScalef(wallThickness, wallHeight, arenaSize);
-    glutSolidCube(1.0);
-    glPopMatrix();
-    
-    // Tembok barat
-    glPushMatrix();
-    glTranslatef(-boundarySize - wallThickness/2, wallHeight/2, 0.0f);
-    glScalef(wallThickness, wallHeight, arenaSize);
-    glutSolidCube(1.0);
-    glPopMatrix();
+
+    if (texture_tembok_pembatas != 0) {
+        glDisable(GL_TEXTURE_2D); // [cite: 66]
+        glBindTexture(GL_TEXTURE_2D,0);
+    }
 }
 
 // Fungsi untuk menggambar jalan
 static void drawRoad() {
     glPushMatrix();
-    glColor3f(0.2f, 0.2f, 0.2f);
-    glTranslatef(0.0f, -0.05f, 0.0f);
-    glScalef(arenaSize, 0.1f, arenaSize);
-    glutSolidCube(1.0);
-    glPopMatrix();
+    if (texture_jalan_paving != 0) { 
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, texture_jalan_paving);
+        glColor3f(1.0f, 1.0f, 1.0f); 
+    } else {
+        glColor3f(0.2f, 0.2f, 0.2f); 
+    }
     
-    // Marka jalan
+    glTranslatef(0.0f, 0.0f, 0.0f); 
+    
+    float halfArena = arenaSize / 2.0f;
+    float texRoadRepeat = arenaSize / 10.0f; 
+
+    glBegin(GL_QUADS);
+        glNormal3f(0.0f, 1.0f, 0.0f); 
+        glTexCoord2f(0.0f, 0.0f); glVertex3f(-halfArena, 0.0f, -halfArena);
+        glTexCoord2f(texRoadRepeat, 0.0f); glVertex3f(halfArena, 0.0f, -halfArena);
+        glTexCoord2f(texRoadRepeat, texRoadRepeat); glVertex3f(halfArena, 0.0f, halfArena);
+        glTexCoord2f(0.0f, texRoadRepeat); glVertex3f(-halfArena, 0.0f, halfArena);
+    glEnd();
+    
+    glPopMatrix(); 
+
+    if (texture_jalan_paving != 0) {
+        glDisable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0); 
+    }
+
+    glEnable(GL_LIGHTING); 
+    glColor3f(1.0f, 1.0f, 1.0f); 
+    
     glPushMatrix();
-    glColor3f(1.0f, 1.0f, 1.0f);
-    glTranslatef(0.0f, 0.01f, 0.0f);
+    glTranslatef(0.0f, 0.01f, 0.0f); 
     
-    // Jalan horizontal
-    glPushMatrix();
-    glTranslatef(0.0f, 0.0f, 0.0f);
-    glScalef(arenaSize-10.0f, 0.01f, 0.5f);
-    glutSolidCube(1.0);
-    glPopMatrix();
-    
-    // Jalan vertikal
-    glPushMatrix();
-    glTranslatef(0.0f, 0.0f, 0.0f);
-    glScalef(0.5f, 0.01f, arenaSize-10.0f);
-    glutSolidCube(1.0);
-    glPopMatrix();
-    
-    glPopMatrix();
+    glPopMatrix(); 
 }
 
-// Initialize the arena
+const vector<Building>& getArenaBuildings() {
+    return buildings;
+}
+
+// Prosedur untuk inisialisasi arena
 void initArena() {
-    // Clear any existing buildings
     buildings.clear();
     
     // Add buildings to the arena
@@ -201,70 +250,78 @@ void initArena() {
     addBuilding(-15.0f, -15.0f, 5.0f, 5.0f, 15.35f, colors[2]);
 }
 
-// Draw the entire arena
-void drawArena() {
-    // Draw the ground/road
-    drawRoad();
-    
-    // Draw walls
-    drawWalls();
+// Fungsi untuk menggambar arena
+void drawArena(float camX, float camY, float camZ) {
+    drawRoad(); 
+    drawWalls(); 
     
     // Draw all buildings
-    for (size_t i = 0; i < buildings.size(); i++) {
-        Building b = buildings[i];
-        drawBuilding(b.x, b.z, b.width, b.depth, b.height, b.color);
+    for (size_t i = 0; i < buildings.size(); i++) { 
+        Building b = buildings[i]; 
+        
+        bool cameraIsInside = isCameraInsideThisBuilding(b, camX, camY, camZ);
+        float currentAlpha = cameraIsInside ? 0.4f : 1.0f;
+        GLuint currentBuildingTextureId = 0; 
+
+        if (b.x > 0 && b.z > 0) { 
+            currentBuildingTextureId = texture_gedung_q1;
+        } else if (b.x < 0 && b.z > 0) { 
+            currentBuildingTextureId = texture_gedung_q2;
+        } else if (b.x < 0 && b.z < 0) { 
+            currentBuildingTextureId = texture_gedung_q4; 
+        } else if (b.x > 0 && b.z < 0) { 
+            currentBuildingTextureId = texture_gedung_q3; 
+        }
+
+
+        if (cameraIsInside) {
+            glEnable(GL_BLEND); 
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
+            drawBuilding(b.x, b.z, b.width, b.depth, b.height, b.color, currentAlpha, currentBuildingTextureId); 
+            glDisable(GL_BLEND); 
+        } else {
+            glDisable(GL_BLEND); 
+            drawBuilding(b.x, b.z, b.width, b.depth, b.height, b.color, currentAlpha, currentBuildingTextureId);
+        }
     }
 }
 
-// Enhanced collision detection that allows horizontal movement on surfaces
+// fungsi untuk mengecek apakah ada kolisi antara Doraemon dan gedung
 bool checkCollision(float x, float y, float z, float radius, float* responseX, float* responseY, float* responseZ) {
     bool collision = false;
     *responseX = 0.0f;
     *responseY = 0.0f;
     *responseZ = 0.0f;
     
-    // Height offset to keep Doraemon properly positioned above surfaces
     float heightOffset = 1.0f;
     
-    // Flag to track if we're standing on a surface
     bool standingOnSurface = false;
     float surfaceHeight = 0.0f;
     
-    // Check collision with buildings
     for (size_t i = 0; i < buildings.size(); i++) {
         Building b = buildings[i];
         
-        // Calculate building dimensions
         float halfWidth = b.width / 2.0f;
         float halfDepth = b.depth / 2.0f;
         
-        // Special case for standing on top of buildings
-        // If Doraemon is above the building in X-Z coordinates
         if (fabs(x - b.x) < halfWidth && fabs(z - b.z) < halfDepth) {
-            // If we're close to the top of the building
             if (y < b.height + radius + heightOffset && y > b.height - radius) {
-                // Remember we're standing on a surface
                 standingOnSurface = true;
                 
-                // Record the surface height if it's higher than any previous surface
                 if (b.height > surfaceHeight) {
                     surfaceHeight = b.height;
                 }
                 
-                // Don't add horizontal collision response when standing on top
                 continue;
             }
         }
         
-        // Regular 3D collision check for sides of buildings
-        // Only if we're not already standing on this building
+
         if (!standingOnSurface || surfaceHeight != b.height) {
-            // Calculate closest point on building box to Doraemon's center
             float closestX = fmax(b.x - halfWidth, fmin(x, b.x + halfWidth));
             float closestY = fmax(0, fmin(y, b.height)); 
             float closestZ = fmax(b.z - halfDepth, fmin(z, b.z + halfDepth));
             
-            // Calculate distance from Doraemon to closest point
             float distanceX = x - closestX;
             float distanceY = y - closestY;
             float distanceZ = z - closestZ;
@@ -273,18 +330,15 @@ bool checkCollision(float x, float y, float z, float radius, float* responseX, f
                                    distanceY * distanceY + 
                                    distanceZ * distanceZ;
             
-            // Check if distance is less than Doraemon's radius squared (collision)
             if (distanceSquared < radius * radius) {
                 float distance = sqrt(distanceSquared);
                 if (distance > 0) {
                     float pushDistance = radius - distance;
                     
-                    // Calculate normalized response vector
                     float normalX = distanceX / distance;
                     float normalY = distanceY / distance;
                     float normalZ = distanceZ / distance;
                     
-                    // Add to response vector
                     *responseX += normalX * pushDistance * 1.05f;
                     *responseY += normalY * pushDistance * 1.05f;
                     *responseZ += normalZ * pushDistance * 1.05f;
@@ -294,14 +348,11 @@ bool checkCollision(float x, float y, float z, float radius, float* responseX, f
         }
     }
     
-    // Check collision with arena boundaries (walls)
     float boundarySize = arenaSize / 2;
     float wallRadius = radius + 0.2f;
     
-    // Walls extend from y=0 to y=wallHeight
     float wallTop = wallHeight;
     
-    // Only check wall collision if Doraemon is below wall height
     if (y < wallTop + radius) {
         // East wall
         if (x + wallRadius > boundarySize) {
@@ -325,18 +376,14 @@ bool checkCollision(float x, float y, float z, float radius, float* responseX, f
         }
     }
     
-    // Check collision with road (at y=0)
     if (!standingOnSurface && y < radius + heightOffset) {
         standingOnSurface = true;
         surfaceHeight = 0.0f;
     }
     
-    // Apply vertical position correction if standing on a surface
     if (standingOnSurface) {
-        // Target height is surface height + radius + height offset
         float targetHeight = surfaceHeight + radius + heightOffset;
         
-        // Apply a gentler vertical correction to avoid abrupt jumps
         *responseY = (targetHeight - y) * 0.5f;
         collision = true;
     }
@@ -352,63 +399,46 @@ void setCameraPosition(float x, float y, float z) {
     updateCameraLook(angleX, angleY);
 }
 
-// Update camera view direction based on angles
+// Prosedur untuk mengubah orientasi kamera
 void updateCameraLook(float newAngleX, float newAngleY) {
     angleX = newAngleX;
     angleY = newAngleY;
     
-    // Convert angles to radians
     float angleXRad = angleX * 3.14159f / 180.0f;
     float angleYRad = angleY * 3.14159f / 180.0f;
     
-    // Calculate look-at point based on angles
     lookX = posX + sin(angleYRad) * cos(angleXRad);
     lookY = posY + sin(angleXRad);
     lookZ = posZ - cos(angleYRad) * cos(angleXRad);
 }
 
-// Get camera position
+// Prosedur untuk mengambil posisi kamera
 void getCameraPosition(float* x, float* y, float* z) {
     *x = posX;
     *y = posY;
     *z = posZ;
 }
 
-// Get camera look-at point
+// Prosedur untuk mengambil orientasi kamera
 void getCameraLookAt(float* x, float* y, float* z) {
     *x = lookX;
     *y = lookY;
     *z = lookZ;
 }
 
-// Draw text on screen
-void drawArenaText(float x, float y, const char* text) {
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    gluOrtho2D(0.0, glutGet(GLUT_WINDOW_WIDTH), 0.0, glutGet(GLUT_WINDOW_HEIGHT));
+// Fungsi untuk menggambar teks di arena
+void drawArenaText(float x, float y, const char* text, float r, float g, float b, void* font) {
+    glColor3f(r, g, b);
     
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadIdentity();
-    
-    glDisable(GL_LIGHTING);
-    glDisable(GL_DEPTH_TEST);
-    
-    glColor3f(1.0f, 1.0f, 1.0f);
     glRasterPos2f(x, y);
-    
     for (const char* c = text; *c != '\0'; c++) {
-        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, *c);
+        glutBitmapCharacter(font, *c);
     }
-    
-    glEnable(GL_LIGHTING);
-    glEnable(GL_DEPTH_TEST);
-    
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);
-    glPopMatrix();
+
+    glRasterPos2f(x + 1, y); 
+    for (const char* c = text; *c != '\0'; c++) {
+        glutBitmapCharacter(font, *c);
+    }
 }
 
 // Set arena size
@@ -419,6 +449,49 @@ void setArenaSize(float size) {
 // Get arena size
 float getArenaSize() {
     return arenaSize;
+}
+
+// Fungsi untuk mendapatkan tinggi gedung
+float getBuildingRoofHeight(float x, float z) {
+    const std::vector<Building>& buildings = getArenaBuildings();
+    for (const auto& b : buildings) {
+        float minX = b.x - b.width / 2.0f;
+        float maxX = b.x + b.width / 2.0f;
+        float minZ = b.z - b.depth / 2.0f;
+        float maxZ = b.z + b.depth / 2.0f;
+        if (x >= minX && x <= maxX && z >= minZ && z <= maxZ) {
+            return b.height; 
+        }
+    }
+    return 0.0f; 
+}
+
+// Prosedur untuk menggambar tanah dan atap gedung
+void drawGroundAndRoofsForStencil() {
+    float halfArena = getArenaSize() / 2.0f;
+
+    glBegin(GL_QUADS);
+        glVertex3f(-halfArena, 0.01f, -halfArena);
+        glVertex3f( halfArena, 0.01f, -halfArena);
+        glVertex3f( halfArena, 0.01f,  halfArena);
+        glVertex3f(-halfArena, 0.01f,  halfArena);
+    glEnd();
+
+    const vector<Building>& buildings = getArenaBuildings();
+    for (const auto& b : buildings) {
+        float minX = b.x - b.width / 2.0f;
+        float maxX = b.x + b.width / 2.0f;
+        float minZ = b.z - b.depth / 2.0f;
+        float maxZ = b.z + b.depth / 2.0f;
+        float roofY = b.height; 
+
+        glBegin(GL_QUADS);
+            glVertex3f(minX, roofY, minZ);
+            glVertex3f(maxX, roofY, minZ);
+            glVertex3f(maxX, roofY, maxZ);
+            glVertex3f(minX, roofY, maxZ);
+        glEnd();
+    }
 }
 
 #endif
